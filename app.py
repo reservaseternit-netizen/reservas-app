@@ -176,7 +176,7 @@ else:
 
                     for arch in archivos:
 
-                        data = arch.getbuffer()
+                        data = arch.getvalue()
                         
                         subir_pdf(
                             nombre_archivo=arch.name,
