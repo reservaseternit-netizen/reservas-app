@@ -7,7 +7,6 @@ import shutil
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from google_drive import subir_pdf
 
 st.set_page_config(page_title="Gestión de Reservas", layout="wide")
 
@@ -176,13 +175,7 @@ else:
 
                     for arch in archivos:
 
-                        data = arch.getvalue()
-                        
-                        subir_pdf(
-                            nombre_archivo=arch.name,
-                            contenido=data
-
-                        )
+                        data = arch.getbuffer()
 
                         timestamp = int(time.time())
 
