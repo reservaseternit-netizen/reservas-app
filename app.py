@@ -35,8 +35,8 @@ section[data-testid="stSidebar"] * { color: white !important; }
 
 # ================= CONFIGURACIÓN DE GITHUB =================
 TOKEN_GITHUB = st.secrets["github"]["access_token"]
-USUARIO_GITHUB = "tu_usuario_de_github"       # ⚠️ CAMBIA ESTO POR TU USUARIO REAL DE GITHUB
-REPOSITORIO_GITHUB = "tu_repositorio"       # ⚠️ CAMBIA ESTO POR EL NOMBRE DE TU REPOSITORIO
+USUARIO_GITHUB = "reservaseternit-netizen"       # ⚠️ CAMBIA ESTO POR TU USUARIO REAL DE GITHUB
+REPOSITORIO_GITHUB = "reservas-app"       # ⚠️ CAMBIA ESTO POR EL NOMBRE DE TU REPOSITORIO
 
 def subir_a_github(ruta_en_github, contenido_bytes, mensaje_commit="Subida de archivo"):
     """Sube o actualiza un archivo directamente en el repositorio de GitHub"""
