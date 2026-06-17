@@ -3,8 +3,11 @@
     "area": "Log\u00edstica",
     "fecha_envio": "2026-06-16 07:06 PM",
     "usuario_envio": "usuario",
-    "estado": "Pendiente",
+    "estado": "Rechazado por Ingeniero",
     "firmado_por": "",
     "fecha_firma": "",
-    "tiempo_aprobacion": ""
+    "tiempo_aprobacion": "",
+    "fecha_rechazo": "2026-06-16 07:07 PM",
+    "rechazado_por": "ingeniero",
+    "motivo_rechazo": "la reserva ya esta firmada "
 }
