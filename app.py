@@ -11,6 +11,11 @@ from zoneinfo import ZoneInfo
 import requests
 import base64
 
+# ======================
+# Sesión persistente
+# ======================
+session = requests.Session()
+
 st.set_page_config(page_title="Gestión de Reservas", layout="wide")
 
 # --- ESTILO ---
@@ -48,7 +53,10 @@ def subir_a_github(ruta_en_github, contenido_bytes, mensaje_commit="Subida de ar
     }
     
     # Primero verificamos si el archivo ya existe para obtener su 'sha' (necesario para reemplazar)
-    respuesta_get = requests.get(url, headers=headers)
+    respuesta_get = session.get(
+        url,
+        headers=headers
+    )
     datos = {
         "message": mensaje_commit,
         "content": contenido_base64
@@ -56,7 +64,12 @@ def subir_a_github(ruta_en_github, contenido_bytes, mensaje_commit="Subida de ar
     if respuesta_get.status_code == 200:
         datos["sha"] = respuesta_get.json()["sha"]
         
-    respuesta = requests.put(url, headers=headers, json=datos)
+    respuesta = session.put(
+        url,
+        headers=headers,
+        json=datos
+    )
+
     return respuesta.status_code in [200, 201]
 
 def eliminar_de_github(ruta_en_github, mensaje_commit="Eliminación de archivo"):
@@ -66,14 +79,17 @@ def eliminar_de_github(ruta_en_github, mensaje_commit="Eliminación de archivo")
         "Authorization": f"token {TOKEN_GITHUB}",
         "Accept": "application/vnd.github.v3+json"
     }
-    respuesta_get = requests.get(url, headers=headers)
+    respuesta_get = session.get(
+        url,
+        headers=headers
+    )
     if respuesta_get.status_code == 200:
         sha = respuesta_get.json()["sha"]
         datos = {
             "message": mensaje_commit,
             "sha": sha
         }
-        requests.delete(url, headers=headers, json=datos)
+        session.delete(url, headers=headers, json=datos)
 # ===========================================================
 
 # --- HORA COLOMBIA ---
