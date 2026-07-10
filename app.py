@@ -7,9 +7,9 @@ import shutil
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-# --- NUEVAS LIBRERÍAS PARA GITHUB ---
 import requests
 import base64
+import threading  # <-- IMPORTANTE: Para ejecución en segundo plano
 
 # ======================
 # Sesión persistente
@@ -40,8 +40,8 @@ section[data-testid="stSidebar"] * { color: white !important; }
 
 # ================= CONFIGURACIÓN DE GITHUB =================
 TOKEN_GITHUB = st.secrets["github"]["access_token"]
-USUARIO_GITHUB = "reservaseternit-netizen"       # ⚠️ CAMBIA ESTO POR TU USUARIO REAL DE GITHUB
-REPOSITORIO_GITHUB = "reservas-app"       # ⚠️ CAMBIA ESTO POR EL NOMBRE DE TU REPOSITORIO
+USUARIO_GITHUB = "reservaseternit-netizen"       
+REPOSITORIO_GITHUB = "reservas-app"       
 
 def subir_a_github(ruta_en_github, contenido_bytes, mensaje_commit="Subida de archivo"):
     """Sube o actualiza un archivo directamente en el repositorio de GitHub"""
@@ -52,25 +52,20 @@ def subir_a_github(ruta_en_github, contenido_bytes, mensaje_commit="Subida de ar
         "Accept": "application/vnd.github.v3+json"
     }
     
-    # Primero verificamos si el archivo ya existe para obtener su 'sha' (necesario para reemplazar)
-    respuesta_get = session.get(
-        url,
-        headers=headers
-    )
-    datos = {
-        "message": mensaje_commit,
-        "content": contenido_base64
-    }
-    if respuesta_get.status_code == 200:
-        datos["sha"] = respuesta_get.json()["sha"]
-        
-    respuesta = session.put(
-        url,
-        headers=headers,
-        json=datos
-    )
-
-    return respuesta.status_code in [200, 201]
+    try:
+        respuesta_get = session.get(url, headers=headers)
+        datos = {
+            "message": mensaje_commit,
+            "content": contenido_base64
+        }
+        if respuesta_get.status_code == 200:
+            datos["sha"] = respuesta_get.json()["sha"]
+            
+        respuesta = session.put(url, headers=headers, json=datos)
+        return respuesta.status_code in [200, 201]
+    except Exception as e:
+        print(f"Error subiendo a GitHub ({ruta_en_github}): {e}")
+        return False
 
 def eliminar_de_github(ruta_en_github, mensaje_commit="Eliminación de archivo"):
     """Elimina un archivo del repositorio de GitHub"""
@@ -79,17 +74,24 @@ def eliminar_de_github(ruta_en_github, mensaje_commit="Eliminación de archivo")
         "Authorization": f"token {TOKEN_GITHUB}",
         "Accept": "application/vnd.github.v3+json"
     }
-    respuesta_get = session.get(
-        url,
-        headers=headers
-    )
-    if respuesta_get.status_code == 200:
-        sha = respuesta_get.json()["sha"]
-        datos = {
-            "message": mensaje_commit,
-            "sha": sha
-        }
-        session.delete(url, headers=headers, json=datos)
+    try:
+        respuesta_get = session.get(url, headers=headers)
+        if respuesta_get.status_code == 200:
+            sha = respuesta_get.json()["sha"]
+            datos = {
+                "message": mensaje_commit,
+                "sha": sha
+            }
+            session.delete(url, headers=headers, json=datos)
+    except Exception as e:
+        print(f"Error eliminando de GitHub ({ruta_en_github}): {e}")
+
+# --- ENMASCARADORES ASÍNCRONOS (BACKGROUND WRAPPERS) ---
+def ejecutar_en_segundo_plano(target_func, *args):
+    """Lanza cualquier función en un hilo separado para no bloquear la UI"""
+    hilo = threading.Thread(target=target_func, args=args, daemon=True)
+    hilo.start()
+
 # ===========================================================
 
 # --- HORA COLOMBIA ---
@@ -145,7 +147,6 @@ if not st.session_state.login:
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-
         if os.path.exists("assets/ETERNITTTTT.png"):
             st.image("assets/ETERNITTTTT.png")
 
@@ -158,24 +159,18 @@ if not st.session_state.login:
         p = st.text_input("Contraseña", type="password")
 
         if st.button("Ingresar", use_container_width=True):
-
             if u in usuarios and usuarios[u]["password"] == p:
-
                 st.session_state.login = True
                 st.session_state.rol = usuarios[u]["rol"]
                 st.session_state.user_name = u
                 st.session_state.pagina = "principal"
-
                 st.rerun()
-
             else:
                 st.error("Credenciales incorrectas")
 
 # ================= SISTEMA =================
 else:
-
     with st.sidebar:
-
         if os.path.exists("assets/ETERNITTTTT.png"):
             st.image("assets/ETERNITTTTT.png", width=180)
 
@@ -186,7 +181,6 @@ else:
         st.markdown("---")
 
         if st.session_state.rol == "usuario":
-
             if st.button("📤 Enviar"):
                 st.session_state.pagina = "principal"
                 st.rerun()
@@ -207,7 +201,6 @@ else:
 
     # ================= USUARIO =================
     if rol == "usuario":
-
         if "pagina" not in st.session_state:
             st.session_state.pagina = "principal"
 
@@ -215,9 +208,7 @@ else:
             st.session_state.upload_key = 0
 
         if st.session_state.pagina == "principal":
-
             st.header("📤 Enviar Nueva Reserva")
-
             area = st.selectbox("Área", areas)
 
             archivos = st.file_uploader(
@@ -228,28 +219,25 @@ else:
             )
 
             if st.button("Enviar"):
-
                 if archivos:
-
                     os.makedirs(f"reservas/pendientes/{area}", exist_ok=True)
                     os.makedirs(f"reservas/enviados/{area}", exist_ok=True)
 
                     for arch in archivos:
-
                         data = arch.getbuffer()
                         timestamp = int(time.time())
                         nombre_unico = f"{timestamp}__{arch.name}"
 
-                        # Guardado temporal en Streamlit local
+                        # Guardado local (Inmediato)
                         with open(f"reservas/pendientes/{area}/{nombre_unico}", "wb") as f:
                             f.write(data)
                         with open(f"reservas/enviados/{area}/{nombre_unico}", "wb") as f:
                             f.write(data)
 
-                        # ===== MODIFICACIÓN: SUBIR AL GITHUB PERMANENTE =====
+                        # HILO ASÍNCRONO: Subida de archivos a GitHub
                         bytes_puros = arch.getvalue()
-                        subir_a_github(f"reservas/pendientes/{area}/{nombre_unico}", bytes_puros, f"Nueva pendiente: {nombre_unico}")
-                        subir_a_github(f"reservas/enviados/{area}/{nombre_unico}", bytes_puros, f"Nuevo historial: {nombre_unico}")
+                        ejecutar_en_segundo_plano(subir_a_github, f"reservas/pendientes/{area}/{nombre_unico}", bytes_puros, f"Nueva pendiente: {nombre_unico}")
+                        ejecutar_en_segundo_plano(subir_a_github, f"reservas/enviados/{area}/{nombre_unico}", bytes_puros, f"Nuevo historial: {nombre_unico}")
 
                         # ===== METADATA =====
                         metadata = {
@@ -263,31 +251,27 @@ else:
                             "tiempo_aprobacion": "",
                         }
 
-                        # Guardado temporal JSON local
+                        # Guardado local JSON
                         with open(f"reservas/enviados/{area}/{nombre_unico}.json", "w") as jf:
                             json.dump(metadata, jf, indent=4)
                         
-                        # ===== MODIFICACIÓN: SUBIR METADATA A GITHUB =====
+                        # HILO ASÍNCRONO: Subida de JSON a GitHub
                         json_bytes = json.dumps(metadata, indent=4).encode('utf-8')
-                        subir_a_github(f"reservas/enviados/{area}/{nombre_unico}.json", json_bytes, f"Metadata: {nombre_unico}")
+                        ejecutar_en_segundo_plano(subir_a_github, f"reservas/enviados/{area}/{nombre_unico}.json", json_bytes, f"Metadata: {nombre_unico}")
 
-                    st.success(f"{len(archivos)} archivos enviados")
+                    st.success(f"{len(archivos)} archivos enviados correctamente.")
                     st.session_state.upload_key += 1
                     st.rerun()
 
         # ================= HISTORIAL =================
         elif st.session_state.pagina == "historial":
-
             st.header("📄 Historial")
-
             col1, col2, col3 = st.columns([3, 3, 1])
             
             with col1:        
                 area_sel = st.selectbox("Filtrar por área", ["Todas"] + areas)
-
             with col2:
                 buscador = st.text_input("🔍 Buscar reserva", placeholder="Ej: 2234657")
-
             with col3:
                 st.write("")
                 if st.button("🔄"):
@@ -301,18 +285,14 @@ else:
                     if os.path.exists(ruta):
                         for f in os.listdir(ruta):
                             if f.endswith(".pdf"):
-                                nombre_visible = mostrar_nombre(f).lower()
-                                texto_busqueda = buscador.lower()
-                                if texto_busqueda in nombre_visible:
+                                if buscador.lower() in mostrar_nombre(f).lower():
                                     archivos_totales.append((a, f))
             else:
                 ruta = f"reservas/enviados/{area_sel}"
                 if os.path.exists(ruta):
                     for f in os.listdir(ruta):
                        if f.endswith(".pdf"):
-                            nombre_visible = mostrar_nombre(f).lower()
-                            texto_busqueda = buscador.lower()
-                            if texto_busqueda in nombre_visible:
+                            if buscador.lower() in mostrar_nombre(f).lower():
                                 archivos_totales.append((area_sel, f))
 
             if not archivos_totales:
@@ -349,27 +329,25 @@ else:
                         )
 
                     if col2.button("🗑️", key=f"hist_{a}_{f}_{i}"):
-                        # Eliminación local
+                        # Eliminación Local (Inmediata)
                         try: os.remove(f"reservas/enviados/{a}/{f}")
                         except: pass
                         try: os.remove(ruta_json)
                         except: pass
 
-                        # ===== MODIFICACIÓN: ELIMINAR DE GITHUB =====
-                        eliminar_de_github(f"reservas/enviados/{a}/{f}", f"Borrando PDF historial: {f}")
-                        eliminar_de_github(f"reservas/enviados/{a}/{f}.json", f"Borrando JSON historial: {f}")
+                        # HILO ASÍNCRONO: Borrado de GitHub
+                        ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/enviados/{a}/{f}", f"Borrando PDF historial: {f}")
+                        ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/enviados/{a}/{f}.json", f"Borrando JSON historial: {f}")
 
                         st.rerun()
                         
     # ================= INGENIERO =================
     elif rol == "ingeniero":
-
         st.header("✍️ Revisión y Firma")
         col1, col2 = st.columns([5, 1])
 
         with col1:
             area = st.selectbox("Área", ["Todas"] + areas)
-
         with col2: 
             if st.button("🔄"): 
                 st.rerun()
@@ -405,7 +383,7 @@ else:
                         if os.path.exists(ruta_firma):
                             doc = fitz.open(ruta)
 
-                            # ===== TU LÓGICA ORIGINAL DE FIRMA =====
+                            # --- Lógica de Firma original ---
                             rect_firma = None
                             pagina_objetivo = None
 
@@ -454,18 +432,17 @@ else:
                                 rect_firma = fitz.Rect(ancho * 0.55, alto * 0.65, ancho * 0.85, alto * 0.85)
 
                             pagina_objetivo.insert_image(rect_firma, filename=ruta_firma)
-                            # ===== FIN LÓGICA ORIGINAL DE FIRMA =====
 
                             os.makedirs(f"reservas/firmadas/{a}", exist_ok=True)
                             ruta_firmado_local = f"reservas/firmadas/{a}/{arc}"
                             doc.save(ruta_firmado_local)
                             doc.close()
 
-                            # ===== MODIFICACIÓN: SUBIR ARCHIVO FIRMADO A GITHUB Y BORRAR EL PENDIENTE =====
+                            # HILO ASÍNCRONO: Procesamiento de GitHub para Firma y Remoción
                             with open(ruta_firmado_local, "rb") as f_firmado:
                                 bytes_firmados = f_firmado.read()
-                            subir_a_github(f"reservas/firmadas/{a}/{arc}", bytes_firmados, f"Documento firmado: {arc}")
-                            eliminar_de_github(f"reservas/pendientes/{a}/{arc}", f"Borrando pendiente firmado: {arc}")
+                            ejecutar_en_segundo_plano(subir_a_github, f"reservas/firmadas/{a}/{arc}", bytes_firmados, f"Documento firmado: {arc}")
+                            ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/pendientes/{a}/{arc}", f"Borrando pendiente firmado: {arc}")
 
                             # ===== ACTUALIZAR METADATA =====
                             ruta_json = f"reservas/enviados/{a}/{arc}.json"
@@ -486,9 +463,9 @@ else:
                                 with open(ruta_json, "w") as jf:
                                     json.dump(metadata, jf, indent=4)
                                 
-                                # Actualizar metadata en GitHub
+                                # HILO ASÍNCRONO: Actualizar metadata en GitHub
                                 json_bytes = json.dumps(metadata, indent=4).encode('utf-8')
-                                subir_a_github(ruta_json, json_bytes, f"Metadata firmada: {arc}")
+                                ejecutar_en_segundo_plano(subir_a_github, ruta_json, json_bytes, f"Metadata firmada: {arc}")
 
                             try: os.remove(ruta)
                             except: pass
@@ -501,11 +478,8 @@ else:
                 if st.button("Rechazar", key=f"r_{arc}_{i}"):
                     if motivo:
                         os.makedirs(f"reservas/rechazados/{a}", exist_ok=True)
-                        
-                        # Movimiento local
                         shutil.move(ruta, f"reservas/rechazados/{a}/{arc}")
 
-                        # Guardado local de rechazo exclusivo
                         info_rechazo = {
                             "motivo": motivo,
                             "fecha_rechazo": hora_colombia().strftime("%Y-%m-%d %I:%M %p"),
@@ -516,15 +490,14 @@ else:
                         with open(f"reservas/rechazados/{a}/{arc}.json", "w") as f:
                             json.dump(info_rechazo, f, indent=4)
 
-                        # ===== MODIFICACIÓN: MOVER EN GITHUB (SUBIR A RECHAZADOS Y QUITAR DE PENDIENTES) =====
+                        # HILO ASÍNCRONO: Mover en GitHub
                         with open(f"reservas/rechazados/{a}/{arc}", "rb") as f_rech:
                             bytes_rech = f_rech.read()
-                        subir_a_github(f"reservas/rechazados/{a}/{arc}", bytes_rech, f"Archivo rechazado: {arc}")
-                        eliminar_de_github(f"reservas/pendientes/{a}/{arc}", f"Removiendo pendiente por rechazo: {arc}")
+                        ejecutar_en_segundo_plano(subir_a_github, f"reservas/rechazados/{a}/{arc}", bytes_rech, f"Archivo rechazado: {arc}")
+                        ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/pendientes/{a}/{arc}", f"Removiendo pendiente por rechazo: {arc}")
                         
-                        # Subir JSON específico de rechazo
                         json_rech_bytes = json.dumps(info_rechazo, indent=4).encode('utf-8')
-                        subir_a_github(f"reservas/rechazados/{a}/{arc}.json", json_rech_bytes, f"JSON especifico rechazo: {arc}")
+                        ejecutar_en_segundo_plano(subir_a_github, f"reservas/rechazados/{a}/{arc}.json", json_rech_bytes, f"JSON especifico rechazo: {arc}")
 
                         # ===== ACTUALIZAR METADATA GENERAL =====
                         ruta_json = f"reservas/enviados/{a}/{arc}.json"
@@ -540,24 +513,20 @@ else:
                             with open(ruta_json, "w") as jf:
                                 json.dump(metadata, jf, indent=4)
                             
-                            # Actualizar metadata general en GitHub
                             json_bytes = json.dumps(metadata, indent=4).encode('utf-8')
-                            subir_a_github(ruta_json, json_bytes, f"Metadata rechazo ingeniero: {arc}")
+                            ejecutar_en_segundo_plano(subir_a_github, ruta_json, json_bytes, f"Metadata rechazo ingeniero: {arc}")
 
                         st.rerun()
 
     # ================= ALMACÉN =================
     elif rol == "almacen":
-
         st.header("📦 Gestión de Documentos")
         col1, col2, col3 = st.columns([3, 3, 1])
 
         with col1:
             area = st.selectbox("Área", ["Todas"] + areas)
-
         with col2:
             busqueda = st.text_input("🔍 Buscar reserva", placeholder="Ej: 22345678 o nombre PDF")
-
         with col3:
             st.write("")
             if st.button("🔄", key="refresh_almacen"):
@@ -575,8 +544,7 @@ else:
                 if os.path.exists(carpeta):
                     for f in os.listdir(carpeta):
                         if f.endswith(".pdf"):
-                            nombre_visible = mostrar_nombre(f)
-                            if (busqueda.strip() == "" or busqueda.lower() in nombre_visible.lower() or busqueda.lower() in f.lower()):
+                            if busqueda.lower() in f.lower():
                                  archivos.append((a, f))
         else:
             if vista == "Firmados": carpeta = f"reservas/firmadas/{area}"
@@ -586,8 +554,7 @@ else:
             os.makedirs(carpeta, exist_ok=True)
             for f in os.listdir(carpeta):
                 if f.endswith(".pdf"):
-                    nombre_visible = mostrar_nombre(f)
-                    if (busqueda.strip() == "" or busqueda.lower() in nombre_visible.lower() or busqueda.lower() in f.lower()):
+                    if busqueda.lower() in f.lower():
                         archivos.append((area, f))
                     
         # ===== MOSTRAR ARCHIVOS =====
@@ -611,11 +578,11 @@ else:
                     os.makedirs(f"reservas/archivo/{a}", exist_ok=True)
                     shutil.move(ruta, f"reservas/archivo/{a}/{f}")
 
-                    # ===== MODIFICACIÓN: TRANSMITIR CAMBIO A GITHUB =====
+                    # HILO ASÍNCRONO: Transmitir a GitHub
                     with open(f"reservas/archivo/{a}/{f}", "rb") as f_arch:
                         bytes_arch = f_arch.read()
-                    subir_a_github(f"reservas/archivo/{a}/{f}", bytes_arch, f"Archivado en repositorio: {f}")
-                    eliminar_de_github(f"reservas/firmadas/{a}/{f}", f"Removiendo de firmados: {f}")
+                    ejecutar_en_segundo_plano(subir_a_github, f"reservas/archivo/{a}/{f}", bytes_arch, f"Archivado en repositorio: {f}")
+                    ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/firmadas/{a}/{f}", f"Removiendo de firmados: {f}")
 
                     # ===== ACTUALIZAR ESTADO METADATA =====
                     ruta_json = f"reservas/enviados/{a}/{f}.json"
@@ -628,9 +595,8 @@ else:
                         with open(ruta_json, "w") as jf:
                             json.dump(metadata, jf, indent=4)
                         
-                        # Actualizar en GitHub
                         json_bytes = json.dumps(metadata, indent=4).encode('utf-8')
-                        subir_a_github(ruta_json, json_bytes, f"Metadata archivada: {f}")
+                        ejecutar_en_segundo_plano(subir_a_github, ruta_json, json_bytes, f"Metadata archivada: {f}")
 
                     st.rerun()
 
@@ -646,11 +612,11 @@ else:
                          os.makedirs(f"reservas/rechazados/{a}", exist_ok=True)
                          shutil.move(ruta, f"reservas/rechazados/{a}/{f}")
 
-                         # ===== MODIFICACIÓN: SUBIR RECHAZO Y ELIMINAR DE FIRMADOS EN GITHUB =====
+                         # HILO ASÍNCRONO: GitHub
                          with open(f"reservas/rechazados/{a}/{f}", "rb") as f_rech_alm:
                              bytes_rech_alm = f_rech_alm.read()
-                         subir_a_github(f"reservas/rechazados/{a}/{f}", bytes_rech_alm, f"Rechazado por almacen: {f}")
-                         eliminar_de_github(f"reservas/firmadas/{a}/{f}", f"Removiendo de firmados por rechazo: {f}")
+                         ejecutar_en_segundo_plano(subir_a_github, f"reservas/rechazados/{a}/{f}", bytes_rech_alm, f"Rechazado por almacen: {f}")
+                         ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/firmadas/{a}/{f}", f"Removiendo de firmados por rechazo: {f}")
 
                          ruta_json = f"reservas/enviados/{a}/{f}.json"
                          if os.path.exists(ruta_json):
@@ -665,9 +631,8 @@ else:
                              with open(ruta_json, "w") as jf:
                                  json.dump(metadata, jf, indent=4)
                              
-                             # Actualizar en GitHub
                              json_bytes = json.dumps(metadata, indent=4).encode('utf-8')
-                             subir_a_github(ruta_json, json_bytes, f"Metadata rechazo almacen: {f}")
+                             ejecutar_en_segundo_plano(subir_a_github, ruta_json, json_bytes, f"Metadata rechazo almacen: {f}")
 
                          st.success("Documento rechazado")
                          st.rerun()
@@ -694,13 +659,13 @@ else:
                     try: os.remove(ruta)
                     except: pass
                     
-                    # ===== MODIFICACIÓN: ACCIÓN BORRAR COMPLETO DE GITHUB =====
+                    # HILO ASÍNCRONO: Borrado total de GitHub
                     if vista == "Archivados":
-                        eliminar_de_github(f"reservas/archivo/{a}/{f}", f"Borrando definitivo archivo: {f}")
+                        ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/archivo/{a}/{f}", f"Borrando definitivo archivo: {f}")
                     else:
-                        eliminar_de_github(f"reservas/rechazados/{a}/{f}", f"Borrando definitivo rechazado: {f}")
+                        ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/rechazados/{a}/{f}", f"Borrando definitivo rechazado: {f}")
                         try: os.remove(f"reservas/rechazados/{a}/{f}.json")
                         except: pass
-                        eliminar_de_github(f"reservas/rechazados/{a}/{f}.json", f"Borrando definitivo JSON rechazo: {f}")
+                        ejecutar_en_segundo_plano(eliminar_de_github, f"reservas/rechazados/{a}/{f}.json", f"Borrando definitivo JSON rechazo: {f}")
             
                     st.rerun()
