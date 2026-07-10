@@ -3,8 +3,8 @@
     "area": "Log\u00edstica",
     "fecha_envio": "2026-07-10 09:14 AM",
     "usuario_envio": "usuario",
-    "estado": "Pendiente",
-    "firmado_por": "",
-    "fecha_firma": "",
-    "tiempo_aprobacion": ""
+    "estado": "Firmado",
+    "firmado_por": "ingeniero",
+    "fecha_firma": "2026-07-10 09:15 AM",
+    "tiempo_aprobacion": "1 minutos"
 }
