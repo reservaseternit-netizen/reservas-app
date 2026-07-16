@@ -3,8 +3,8 @@
     "area": "Producci\u00f3n",
     "fecha_envio": "2026-07-15 09:03 PM",
     "usuario_envio": "usuario",
-    "estado": "Pendiente",
-    "firmado_por": "",
-    "fecha_firma": "",
-    "tiempo_aprobacion": ""
+    "estado": "Firmado",
+    "firmado_por": "ingeniero",
+    "fecha_firma": "2026-07-15 09:03 PM",
+    "tiempo_aprobacion": "0 minutos"
 }
